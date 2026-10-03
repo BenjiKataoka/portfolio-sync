@@ -1,0 +1,10 @@
+{
+  "name": "portfolio-sync",
+  "version": "0.1.0",
+  "description": "Drafts portfolio entries from your opted-in GitHub repos, facts only, and opens a PR you review.",
+  "author": { "name": "Benjamin Kataoka", "url": "https://benjikataoka.com" },
+  "homepage": "https://github.com/BenjiKataoka/portfolio-sync",
+  "repository": "https://github.com/BenjiKataoka/portfolio-sync",
+  "license": "MIT",
+  "keywords": ["portfolio", "github", "automation"]
+}

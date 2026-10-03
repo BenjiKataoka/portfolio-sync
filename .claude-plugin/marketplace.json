@@ -1,0 +1,6 @@
+{
+  "name": "portfolio-sync",
+  "description": "portfolio-sync: keep a developer portfolio in step with your GitHub repos.",
+  "owner": { "name": "Benjamin Kataoka", "url": "https://github.com/BenjiKataoka" },
+  "plugins": [{ "name": "portfolio-sync", "source": "./" }]
+}
