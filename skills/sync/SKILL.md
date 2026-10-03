@@ -38,7 +38,9 @@ If there's no `.portfolio-sync.json`, help the user write one: see "Config" in
 Read, in full:
 - the facts file (`README` and `metadata`),
 - `config.file`, so you can copy the exact shape, field order, quoting and indentation of the existing entries,
-- every file in `config.context`, for allowed values such as tech keys,
+- every file in `config.context`, for allowed values such as tech keys. These files are read-only rules: never
+  add to them. If no allowed value fits, leave the field empty and tell the user why (adding a skill is a claim only
+  they can make),
 - the candidate images (view each one).
 
 Follow `config.voice`. If it's empty, match the tone of the existing entries.
