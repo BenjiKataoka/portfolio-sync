@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRemote, isListed, readmeImages, ogImage, checkDraft, insertEntry, prBody } from './lib.mjs';
+import { safeName, publicUrl, parseRemote, isListed, readmeImages, ogImage, checkDraft, insertEntry, prBody } from './lib.mjs';
 
 test('parseRemote', () => {
   assert.deepEqual(parseRemote('https://github.com/BenjiKataoka/Personal-Portfolio.git'), { owner: 'BenjiKataoka', repo: 'Personal-Portfolio' });
@@ -65,4 +65,21 @@ test('prBody carries the dedup marker and escapes table cells', () => {
   assert.ok(body.startsWith('<!-- portfolio-sync:o/r -->'));
   assert.match(body, /\| a\\\|b \| README: "q" \|/);
   assert.match(body, /Check these/);
+});
+
+test('safeName: plain repo names only', () => {
+  for (const ok of ['Burnrate', 'Fantas.ai', 'Reinforcement-Learning-Self-Driving-Car-', 'a_b']) assert.equal(safeName(ok), ok);
+  for (const bad of ['..', '.', '../x', 'a/b', '', 'a\\b', undefined]) assert.throws(() => safeName(bad));
+});
+
+test('publicUrl: https to a public hostname only', () => {
+  assert.ok(publicUrl('https://raw.githubusercontent.com/o/r/main/a.png'));
+  for (const bad of ['http://x.dev/a.png', 'file:///etc/passwd', 'https://localhost/a.png', 'https://127.0.0.1/a.png',
+    'https://169.254.169.254/latest', 'https://[::1]/a.png', 'https://10.0.0.5/a.png', 'https://metadata.google.internal/x', 'not a url']) {
+    assert.ok(!publicUrl(bad), bad);
+  }
+});
+
+test('readmeImages: drops paths that climb out of the repo', () => {
+  assert.deepEqual(readmeImages('![x](../../../user/a.png) ![y](docs/a.png?x=1)', 'o', 'r', 'main'), []);
 });

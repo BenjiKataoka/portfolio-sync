@@ -2,6 +2,26 @@
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** A repo name safe to use as a path segment; throws otherwise. */
+export function safeName(name) {
+  if (typeof name !== 'string' || !/^[A-Za-z0-9._-]+$/.test(name) || /^\.+$/.test(name)) throw new Error(`bad repo name: ${name}`);
+  return name;
+}
+
+/**
+ * True for https URLs to a public-looking hostname: no IP literals, localhost or internal names.
+ * ponytail: hostname check only; DNS rebinding and redirects to internal hosts aren't covered. The URLs come from
+ * the user's own opted-in repos, so this guards against accidents rather than a determined attacker.
+ */
+export function publicUrl(url) {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return protocol === 'https:' && hostname.includes('.') && !/^[\d.]+$|^\[|localhost|\.internal$|\.local$/i.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** Parses `owner/repo` out of a GitHub remote URL (https or ssh). */
 export function parseRemote(url) {
   const m = url.trim().match(/github\.com[/:]([^/]+)\/(.+?)(?:\.git)?\/?$/);
@@ -29,7 +49,7 @@ export function readmeImages(md, owner, repo, branch) {
   srcs.sort((a, b) => md.indexOf(a) - md.indexOf(b));
   const out = [];
   for (const src of srcs) {
-    if (BADGE.test(src)) continue;
+    if (BADGE.test(src) || /(^|\/)\.\.(\/|$)|[?#]/.test(src) && !/^https?:\/\//.test(src)) continue;
     const url = /^https?:\/\//.test(src)
       ? src.replace(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\//, 'https://raw.githubusercontent.com/$1/')
       : `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${src.replace(/^\.?\//, '')}`;

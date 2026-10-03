@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync, existsSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseRemote, isListed, prMarker, readmeImages, ogImage, checkDraft, insertEntry, prBody } from './lib.mjs';
+import { safeName, publicUrl, parseRemote, isListed, prMarker, readmeImages, ogImage, checkDraft, insertEntry, prBody } from './lib.mjs';
 
 const TMP = join(tmpdir(), 'portfolio-sync');
 const MAX_IMAGES = 3;
@@ -30,13 +30,16 @@ const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'im
 /** Saves one image into dir and returns its path, or null. Own-repo files go through gh so private repos work. */
 async function download(url, dir, n, owner, repo) {
   try {
-    const own = url.match(new RegExp(`^https://raw\\.githubusercontent\\.com/${owner}/${repo}/([^/]+)/(.+)$`));
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const own = url.match(new RegExp(`^https://raw\\.githubusercontent\\.com/${esc(owner)}/${esc(repo)}/([^/?#]+)/([^?#]+)$`));
+    if (own && /(^|\/)\.\.(\/|$)/.test(decodeURIComponent(own[2]))) return null;
     let buf, type;
     if (own) {
       buf = gh(['api', `repos/${owner}/${repo}/contents/${own[2]}?ref=${own[1]}`, '-H', 'Accept: application/vnd.github.raw'], 'buffer');
       const ext = own[2].toLowerCase().match(/\.(png|jpe?g|webp|gif|avif)$/)?.[1];
       type = ext && `image/${ext === 'jpg' ? 'jpeg' : ext}`;
     } else {
+      if (!publicUrl(url)) return null;
       const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
       if (!res.ok) return null;
       type = res.headers.get('content-type')?.split(';')[0];
@@ -73,7 +76,7 @@ async function candidates() {
       `languages: ${(r.languages ?? []).map((l) => l.node?.name ?? l.name).join(', ')}`,
     ].join('\n');
 
-    const dir = join(TMP, r.name);
+    const dir = join(TMP, safeName(r.name));
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'facts.json'), JSON.stringify({ README: readme, metadata }, null, 2));
@@ -85,7 +88,7 @@ async function candidates() {
       const img = await download(url, dir, images.length + 1, owner, r.name);
       if (img) images.push(img);
     }
-    if (!images.length && r.homepageUrl) {
+    if (!images.length && r.homepageUrl && publicUrl(r.homepageUrl)) {
       const og = await fetch(r.homepageUrl, { signal: AbortSignal.timeout(15000) }).then((res) => res.text()).then((h) => ogImage(h, r.homepageUrl)).catch(() => null);
       const img = og && await download(og, dir, 1, owner, r.name);
       if (img) images.push(img);
@@ -102,7 +105,7 @@ async function candidates() {
 
 function check(draftPath) {
   const draft = json(draftPath);
-  const result = checkDraft(draft, json(join(TMP, draft.repo, 'facts.json')));
+  const result = checkDraft(draft, json(join(TMP, safeName(draft.repo), 'facts.json')));
   console.log(JSON.stringify(result, null, 2));
   if (result.errors.length) process.exit(1);
   return result;
@@ -112,6 +115,7 @@ function apply(draftPath) {
   const cfg = config();
   const { owner } = origin();
   const draft = json(draftPath);
+  safeName(draft.repo);
   const { warnings } = check(draftPath);
   if (draft.image) {
     if (!inside(join(TMP, draft.repo), draft.image.from)) throw new Error(`image.from must be one of the candidate images: ${draft.image.from}`);
