@@ -22,13 +22,6 @@ export function publicUrl(url) {
   }
 }
 
-/** Parses `owner/repo` out of a GitHub remote URL (https or ssh). */
-export function parseRemote(url) {
-  const m = url.trim().match(/github\.com[/:]([^/]+)\/(.+?)(?:\.git)?\/?$/);
-  if (!m) throw new Error(`not a GitHub remote: ${url}`);
-  return { owner: m[1], repo: m[2] };
-}
-
 /** True when the data file already mentions the repo, by URL or as a quoted name (e.g. gh('Burnrate')). */
 export function isListed(text, owner, repo) {
   if (text.toLowerCase().includes(`github.com/${owner}/${repo}`.toLowerCase())) return true;
@@ -65,6 +58,17 @@ export function ogImage(html, pageUrl) {
   return content ? new URL(content, pageUrl).href : null;
 }
 
+/** The image type from its first bytes, or null. Headers and file names can lie; magic bytes can't. */
+export function imageExt(buf) {
+  const at = (from, to) => buf.subarray(from, to).toString('latin1');
+  if (buf[0] === 0x89 && at(1, 4) === 'PNG') return 'png';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (at(0, 4) === 'GIF8') return 'gif';
+  if (at(0, 4) === 'RIFF' && at(8, 12) === 'WEBP') return 'webp';
+  if (at(4, 12) === 'ftypavif') return 'avif';
+  return null;
+}
+
 const norm = (s) => s.toLowerCase().replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim();
 
 /**
@@ -73,14 +77,19 @@ const norm = (s) => s.toLowerCase().replace(/[*_`]/g, '').replace(/\s+/g, ' ').t
  */
 export function checkDraft(draft, facts) {
   const errors = [];
-  if (!draft.sources?.length) errors.push('draft has no sources');
-  for (const s of draft.sources ?? []) {
-    const text = facts[s.from];
+  if (typeof draft.entry !== 'string' || !draft.entry.trim()) errors.push('draft.entry must be a non-empty string');
+  if (!Array.isArray(draft.imports ?? []) || (draft.imports ?? []).some((i) => typeof i !== 'string' || i.includes('\n'))) {
+    errors.push('draft.imports must be a list of single lines');
+  }
+  if (!Array.isArray(draft.sources) || !draft.sources.length) errors.push('draft has no sources');
+  for (const s of Array.isArray(draft.sources) ? draft.sources : []) {
+    const text = Object.hasOwn(facts, s.from) ? facts[s.from] : null;
+    const quote = norm(String(s.quote ?? ''));
     if (text == null) errors.push(`unknown source "${s.from}" for claim "${s.claim}"`);
-    else if (!s.quote || !norm(text).includes(norm(s.quote))) errors.push(`quote not found in ${s.from}: "${s.quote}"`);
+    else if (quote.length < 3 || !norm(text).includes(quote)) errors.push(`quote not found in ${s.from}: "${s.quote}"`);
   }
   const all = norm(Object.values(facts).join('\n'));
-  const nums = new Set(draft.entry.match(/\d+(?:[.,]\d+)?%?/g) ?? []);
+  const nums = new Set(String(draft.entry ?? '').match(/\b\d+(?:[.,]\d+)?%?/g) ?? []);
   const warnings = [...nums]
     .filter((n) => !new RegExp(`(^|[^\\d.,])${escapeRe(n)}(?![\\d]|[.,]\\d)`).test(all))
     .map((n) => `"${n}" isn't in the repo`);
@@ -89,31 +98,44 @@ export function checkDraft(draft, facts) {
 
 /** Inserts the entry on the line above the marker and any new import lines after the last import. */
 export function insertEntry(text, marker, entry, imports = []) {
+  if (entry.includes(marker)) throw new Error('the entry must not contain the marker');
   const lines = text.split('\n');
   const hits = lines.flatMap((l, i) => (l.includes(marker) ? [i] : []));
   if (hits.length !== 1) throw new Error(`expected the marker "${marker}" exactly once, found ${hits.length}`);
   lines.splice(hits[0], 0, ...entry.replace(/\n+$/, '').split('\n'));
   const fresh = imports.filter((i) => !lines.includes(i));
   if (fresh.length) {
+    // The end of the last import statement, which may span lines: `import {\n  a,\n} from './a';`
     let last = -1;
-    lines.forEach((l, i) => { if (/^import\b/.test(l)) last = i; });
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^import\b/.test(lines[i])) continue;
+      while (i < lines.length - 1 && !/['"][^'"]*['"]\s*;?\s*(\/\/.*)?$/.test(lines[i])) i++;
+      last = i;
+    }
     lines.splice(last + 1, 0, ...fresh);
   }
   return lines.join('\n');
 }
 
+/**
+ * Text from a README made safe for the PR body: no HTML (so no forged dedup marker), no @mentions, no table breaks.
+ */
+const md = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/@/g, '@&#8203;').replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
+
 /** The PR body: the dedup marker, the claim table, and anything the reviewer should look at. */
-export function prBody({ owner, repo, sources, warnings, cover, verify }) {
-  const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+export function prBody({ owner, repo, sources, warnings, image, verify }) {
+  const cover = image ? `${md(image.to.split('/').pop())} from ${md(image.source ?? 'the repo')}` : 'none';
   return [
     prMarker(owner, repo),
     `Drafted from [${owner}/${repo}](https://github.com/${owner}/${repo}). Check it on the preview, edit anything, then merge. Close it to never propose this repo again.`,
     '',
     '| Claim | Source |',
     '|---|---|',
-    ...sources.map((s) => `| ${cell(s.claim)} | ${cell(s.from)}: "${cell(s.quote)}" |`),
+    ...sources.map((s) => `| ${md(s.claim)} | ${md(s.from)}: "${md(s.quote)}" |`),
     '',
-    ...(warnings.length ? ['**Check these:** ' + warnings.join('; '), ''] : []),
-    `Cover: ${cover}. \`${verify}\` ✅`,
+    ...(warnings.length ? ['**Check these:** ' + warnings.map(md).join('; '), ''] : []),
+    `Cover: ${cover}. \`${verify}\` passed.`,
   ].join('\n');
 }

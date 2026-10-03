@@ -1,12 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { safeName, publicUrl, parseRemote, isListed, readmeImages, ogImage, checkDraft, insertEntry, prBody } from './lib.mjs';
-
-test('parseRemote', () => {
-  assert.deepEqual(parseRemote('https://github.com/BenjiKataoka/Personal-Portfolio.git'), { owner: 'BenjiKataoka', repo: 'Personal-Portfolio' });
-  assert.deepEqual(parseRemote('git@github.com:a/b.c.git\n'), { owner: 'a', repo: 'b.c' });
-  assert.throws(() => parseRemote('https://gitlab.com/a/b'));
-});
+import { safeName, publicUrl, imageExt, isListed, readmeImages, ogImage, checkDraft, insertEntry, prBody } from './lib.mjs';
 
 test('isListed: URL or quoted repo name', () => {
   const file = "links: [gh('Fantas.ai')], href: 'https://github.com/benjikataoka/Burnrate'";
@@ -61,9 +55,9 @@ test('insertEntry: above the marker, imports after the last import, no duplicate
 });
 
 test('prBody carries the dedup marker and escapes table cells', () => {
-  const body = prBody({ owner: 'o', repo: 'r', sources: [{ claim: 'a|b', quote: 'q', from: 'README' }], warnings: ['"4" isn\'t in the repo'], cover: 'docs/a.png', verify: 'npm test' });
+  const body = prBody({ owner: 'o', repo: 'r', sources: [{ claim: 'a|b', quote: 'qqq', from: 'README' }], warnings: ['"4" isn\'t in the repo'], image: { to: 'docs/a.png', source: 'README' }, verify: 'npm test' });
   assert.ok(body.startsWith('<!-- portfolio-sync:o/r -->'));
-  assert.match(body, /\| a\\\|b \| README: "q" \|/);
+  assert.match(body, /\| a\\\|b \| README: "qqq" \|/);
   assert.match(body, /Check these/);
 });
 
@@ -82,4 +76,41 @@ test('publicUrl: https to a public hostname only', () => {
 
 test('readmeImages: drops paths that climb out of the repo', () => {
   assert.deepEqual(readmeImages('![x](../../../user/a.png) ![y](docs/a.png?x=1)', 'o', 'r', 'main'), []);
+});
+
+test('imageExt: magic bytes, not headers', () => {
+  const pad = (h) => Buffer.concat([Buffer.from(h, 'latin1'), Buffer.alloc(16)]);
+  assert.equal(imageExt(pad('\x89PNG\r\n')), 'png');
+  assert.equal(imageExt(pad('\xff\xd8\xff\xe0')), 'jpg');
+  assert.equal(imageExt(pad('GIF89a')), 'gif');
+  assert.equal(imageExt(pad('RIFF\0\0\0\0WEBP')), 'webp');
+  assert.equal(imageExt(pad('\0\0\0\x1cftypavif')), 'avif');
+  assert.equal(imageExt(pad('<!doctype html>')), null);
+  assert.equal(imageExt(pad('<svg xmlns=')), null);
+});
+
+test('checkDraft: shape, blank quotes, numbers inside names', () => {
+  const facts = { README: 'Runs every 15 minutes.', metadata: '' };
+  const q = [{ claim: 'c', quote: 'every 15 minutes', from: 'README' }];
+  assert.deepEqual(checkDraft({ entry: "id: 'project2', every 15 minutes", sources: q }, facts), { errors: [], warnings: [] });
+  assert.match(checkDraft({ entry: 'x', sources: [{ claim: 'c', quote: '  ', from: 'README' }] }, facts).errors[0], /quote/);
+  assert.ok(checkDraft({ sources: q }, facts).errors.some((e) => /entry/.test(e)), 'missing entry is an error, not a crash');
+  assert.ok(checkDraft({ entry: 'x', imports: ['a\nb'], sources: q }, facts).errors.some((e) => /imports/.test(e)));
+});
+
+test('insertEntry: multi-line imports, marker inside the entry', () => {
+  const file = "import {\n  a,\n  b,\n} from './ab';\nimport c from './c';\n\nconst x = [\n  // M\n];\n";
+  assert.equal(insertEntry(file, '// M', '  1,', ["import d from './d';"]),
+    "import {\n  a,\n  b,\n} from './ab';\nimport c from './c';\nimport d from './d';\n\nconst x = [\n  1,\n  // M\n];\n");
+  const multi = "import {\n  a,\n} from './a';\nconst x = [\n  // M\n];";
+  assert.equal(insertEntry(multi, '// M', '  1,', ["import d from './d';"]).split('\n')[3], "import d from './d';");
+  assert.throws(() => insertEntry(file, '// M', '  1, // M'), /marker/);
+  assert.equal(insertEntry("import a from './a'; // note\nconst y = 1;\n// M", '// M', '1', ["import d from './d';"]).split('\n')[1], "import d from './d';");
+});
+
+test('prBody: quotes cannot ping people or forge the dedup marker', () => {
+  const body = prBody({ owner: 'o', repo: 'r', warnings: [], verify: 'v', image: { to: 'a/x.png', source: '<!-- portfolio-sync:o/z -->' },
+    sources: [{ claim: 'thanks @alice', quote: '<!-- portfolio-sync:o/other -->', from: 'README' }] });
+  assert.equal(body.match(/<!--/g).length, 1, 'only the real marker');
+  assert.ok(!/@alice/.test(body));
 });

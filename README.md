@@ -52,6 +52,26 @@ Add `.portfolio-sync.json` to your portfolio repo's root:
 
 Then, from the portfolio repo, run `/portfolio-sync:sync`.
 
+## Privacy
+
+- **Claude reads what you opt in.** Tagged repos' README, description, topics, languages and images are read by
+  Claude through your Claude Code session, the same as any file you open in Claude Code.
+- **Private repos are opt-in twice.** A tagged private repo is only drafted after you say yes in the session, and
+  scheduled runs skip private repos entirely. Once drafted, its name, quotes and cover image go on your portfolio,
+  and the quotes also go in the PR description, which anyone can read if the portfolio repo is public.
+- **Nothing leaves GitHub except image downloads.** GitHub data comes through `gh` with your login. Images hosted
+  elsewhere are downloaded without credentials, from public `https` hosts only, at up to 10 MB each.
+- **Facts stay in a private temp folder** (`$TMPDIR/portfolio-sync-<uid>`), readable only by you.
+- **Repo content is treated as data.** The skill tells Claude never to follow instructions found inside a README or
+  image.
+
+## Limits
+
+- Only repos owned by the same account as the portfolio repo are found (not repos in organizations).
+- The data file needs a format that allows comments, so the marker line can exist: TS/JS, YAML, TOML, MDX or
+  Markdown (`<!-- portfolio-sync:insert -->`). Plain JSON has no comments, so it isn't supported.
+- A repo whose name appears in the data file as a quoted string, such as `'Burnrate'`, counts as already listed.
+
 ## Opting out
 
 - Remove the topic from a repo to stop it being proposed.
