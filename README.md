@@ -1,6 +1,6 @@
 # portfolio-sync
 
-> **Status: in design.** Nothing to install yet. See [docs/HANDOFF.md](docs/HANDOFF.md) for the plan.
+> **Status: in design.** Nothing to install yet. See [docs/DESIGN.md](docs/DESIGN.md) for the design.
 
 A GitHub Action that keeps a developer portfolio up to date. Tag a repo with the `portfolio` topic, and portfolio-sync reads it (README, languages, topics, homepage, screenshots), drafts a project entry with Claude in your portfolio's own format, and opens a pull request on your portfolio repo. You review the draft on your host's preview deployment, edit if needed, and merge.
 
