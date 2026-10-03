@@ -92,7 +92,7 @@ async function candidates() {
 
   const out = [];
   for (const r of repos) {
-    if (r.name === portfolio || isListed(file, owner, r.name) || bodies.includes(prMarker(owner, r.name))) continue;
+    if (r.name === portfolio || isListed(file, owner, r.name, cfg.marker) || bodies.includes(prMarker(owner, r.name))) continue;
     const branch = r.defaultBranchRef?.name ?? 'main';
     let readme = '';
     try { readme = gh(['api', `repos/${owner}/${r.name}/readme`, '-H', 'Accept: application/vnd.github.raw']); } catch { /* no README */ }

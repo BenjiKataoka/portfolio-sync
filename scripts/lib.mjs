@@ -22,8 +22,12 @@ export function publicUrl(url) {
   }
 }
 
-/** True when the data file already mentions the repo, by URL or as a quoted name (e.g. gh('Burnrate')). */
-export function isListed(text, owner, repo) {
+/**
+ * True when the data file already mentions the repo, by URL or as a quoted name (e.g. gh('Burnrate')).
+ * The marker line is ignored: a comment on it may mention any repo (even portfolio-sync's own URL).
+ */
+export function isListed(text, owner, repo, marker) {
+  if (marker) text = text.split('\n').filter((l) => !l.includes(marker)).join('\n');
   if (text.toLowerCase().includes(`github.com/${owner}/${repo}`.toLowerCase())) return true;
   return new RegExp(`(['"\`])${escapeRe(repo)}\\1`).test(text);
 }

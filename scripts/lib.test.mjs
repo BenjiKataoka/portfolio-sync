@@ -8,6 +8,9 @@ test('isListed: URL or quoted repo name', () => {
   assert.ok(isListed(file, 'BenjiKataoka', 'Burnrate'));
   assert.ok(!isListed(file, 'BenjiKataoka', 'Fantas'), 'substring of a quoted name is not a match');
   assert.ok(!isListed(file, 'BenjiKataoka', 'portfolio-sync'));
+  const marked = "  // portfolio-sync:insert (entries from github.com/BenjiKataoka/portfolio-sync land here)\n];";
+  assert.ok(!isListed(marked, 'BenjiKataoka', 'portfolio-sync', '// portfolio-sync:insert'), 'the marker line never counts');
+  assert.ok(isListed(marked, 'BenjiKataoka', 'portfolio-sync'), 'without the marker argument it would match');
 });
 
 test('readmeImages: order, badges, relative paths, blob links', () => {
