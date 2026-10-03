@@ -2,3 +2,8 @@ node_modules/
 dist/
 .env
 .DS_Store
+
+# Notes stay local; only the README and the plugin skill are published
+*.md
+!README.md
+!skills/**/SKILL.md

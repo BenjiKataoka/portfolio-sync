@@ -1,6 +1,6 @@
 # portfolio-sync
 
-> **Status: v0.1, first real run pending.** See [docs/DESIGN.md](docs/DESIGN.md).
+> **Status: v0.1, first real run pending.**
 
 A Claude Code plugin that keeps a developer portfolio up to date. Tag a repo with the `portfolio` topic, run
 `/portfolio-sync:sync`, and Claude drafts an entry in your portfolio's own format from the facts in that repo. You
